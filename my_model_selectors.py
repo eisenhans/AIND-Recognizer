@@ -1,6 +1,7 @@
 import math
 import statistics
 import warnings
+import sys
 
 import numpy as np
 from hmmlearn.hmm import GaussianHMM
@@ -101,9 +102,62 @@ class SelectorCV(ModelSelector):
     ''' select best model based on average log Likelihood of cross-validation folds
 
     '''
-
     def select(self):
-        warnings.filterwarnings("ignore", category=DeprecationWarning)
+#        warnings.filterwarnings("ignore", category=DeprecationWarning)
+        
+#        training = asl.build_training(features_ground) # Experiment here with different feature sets
+#        word = 'VEGETABLE' # Experiment here with different words
+#        word_sequences = training.get_word_sequences(word)
+#        split_method = KFold()
+#        for cv_train_idx, cv_test_idx in split_method.split(word_sequences):
+#            print("Train fold indices:{} Test fold indices:{}".format(cv_train_idx, cv_test_idx))  # view indices of the folds        
 
-        # TODO implement model selection using CV
-        raise NotImplementedError
+        split_method = KFold()
+        
+        mean_scores = {}
+        for num_states in range(2, 8):
+            scores = []
+            for cv_train_idx, cv_test_idx in split_method.split(self.sequences):
+                print("Train fold indices:{} Test fold indices:{}".format(cv_train_idx, cv_test_idx))  # view indices of the folds                  
+            
+                train_x, train_lengths = combine_sequences(cv_train_idx, self.sequences)
+                test_x, test_lengths = combine_sequences(cv_test_idx, self.sequences)
+            
+#                print('len(train_samples): {}, train_lengths: {}, len(test_samples): {}, test_lengths: {}'.format(
+#                        len(train_x), train_lengths, len(test_x), test_lengths))
+                    
+                try:
+                    hmm_model = GaussianHMM(n_components=num_states, covariance_type="diag", n_iter=1000,
+                                            random_state=self.random_state, verbose=False).fit(train_x, train_lengths)
+            
+                    score = hmm_model.score(test_x, test_lengths)
+                    scores.append(score)
+                    
+#                    if self.verbose:
+#                        print("model created for {} with {} states".format(self.this_word, self.n_constant))
+                except Exception as e:
+                    if self.verbose:
+                        print("failure on {} with {} states".format(self.this_word, self.n_constant))
+                        print('error: ', e)
+                
+            mean_score = np.mean(scores)
+            mean_scores[num_states] = mean_score
+            print('scores for {} states: {}, mean score: {}'.format(num_states, scores, mean_score))
+                        
+        print('mean scores: {}'.format(mean_scores))
+        
+#        try:
+#            hmm_model = GaussianHMM(n_components=4, covariance_type="diag", n_iter=1000,
+#                                    random_state=self.random_state, verbose=False).fit(self.X, self.lengths)
+#    
+#            if self.verbose:
+#                print("model created for {} with {} states".format(self.this_word, self.n_constant))
+#            return hmm_model
+#        except Exception as e:
+#            if self.verbose:
+#                print("failure on {} with {} states".format(self.this_word, self.n_constant))
+#                print('error: ', e)
+#            return None
+        
+        best_num_components = self.n_constant
+        return self.base_model(best_num_components)
