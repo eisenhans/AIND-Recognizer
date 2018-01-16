@@ -76,10 +76,45 @@ class SelectorBIC(ModelSelector):
         :return: GaussianHMM object
         """
         warnings.filterwarnings("ignore", category=DeprecationWarning)
+        
+        bics = {}
+        for num_states in range(2, 8):
+           
+            try:
+                hmm_model = GaussianHMM(n_components=num_states, covariance_type="diag", n_iter=1000,
+                                        random_state=self.random_state, verbose=False).fit(self.X, self.lengths)
+        
+            except Exception as e:
+                if self.verbose:
+                    print("failure on {} with {} states".format(self.this_word, self.n_constant))
+                    print('error: ', e)
+                
+            score = hmm_model.score(self.X, self.lengths)
+            bic = self.bic(score, 4, num_states)
+            bics[num_states] = bic
+        
+        min_key = min(bics, key = bics.get)                
+        print('bics: {}, min: {}'.format(bics, min_key))
+        
+        try:
+            chosen_model = GaussianHMM(n_components=min_key, covariance_type="diag", n_iter=1000,
+                                    random_state=self.random_state, verbose=False).fit(self.X, self.lengths)
+            return chosen_model
 
-        # TODO implement model selection based on BIC scores
-        raise NotImplementedError
-
+        except Exception as e:
+            if self.verbose:
+                print("failure on {} with {} states".format(self.this_word, self.n_constant))
+                print('error: ', e)
+        
+        best_num_components = self.n_constant
+        return self.base_model(best_num_components)
+    
+    def bic(self, log_likelihood, num_features, num_states):
+        # TODO: understand this formula
+        p = np.square(num_states) + 2 * num_states * num_features - 1
+        bic = p * np.log(num_features) - 2 * log_likelihood
+        
+        return bic
 
 class SelectorDIC(ModelSelector):
     ''' select best model based on Discriminative Information Criterion
@@ -94,8 +129,47 @@ class SelectorDIC(ModelSelector):
     def select(self):
         warnings.filterwarnings("ignore", category=DeprecationWarning)
 
-        # TODO implement model selection based on DIC scores
-        raise NotImplementedError
+        dics = {}
+        for num_states in range(2, 8):
+           
+            try:
+                hmm_model = GaussianHMM(n_components=num_states, covariance_type="diag", n_iter=1000,
+                                        random_state=self.random_state, verbose=False).fit(self.X, self.lengths)
+        
+            except Exception as e:
+                if self.verbose:
+                    print("failure on {} with {} states".format(self.this_word, self.n_constant))
+                    print('error: ', e)
+                
+            score = hmm_model.score(self.X, self.lengths)
+            other_scores = []
+            for word in self.hwords:
+                xes, lengths = self.hwords[word]
+                other_score = hmm_model.score(xes, lengths)
+                other_scores.append(other_score)
+            
+            dic = self.dic(score, other_scores)
+            dics[num_states] = dic
+        
+        max_key = max(dics, key = dics.get)                
+        print('dics: {}, max: {}'.format(dics, max_key))
+        
+        try:
+            chosen_model = GaussianHMM(n_components=max_key, covariance_type="diag", n_iter=1000,
+                                    random_state=self.random_state, verbose=False).fit(self.X, self.lengths)
+            return chosen_model
+
+        except Exception as e:
+            if self.verbose:
+                print("failure on {} with {} states".format(self.this_word, self.n_constant))
+                print('error: ', e)
+        
+        best_num_components = self.n_constant
+        return self.base_model(best_num_components)
+    
+    def dic(self, log_likelihood, other_log_likelihoods):
+        # DIC = log(P(X(i)) - 1/(M-1)SUM(log(P(X(all but i))
+        return log_likelihood - np.mean(other_log_likelihoods)
 
 
 class SelectorCV(ModelSelector):
@@ -105,13 +179,6 @@ class SelectorCV(ModelSelector):
     def select(self):
         warnings.filterwarnings("ignore", category=DeprecationWarning)
         
-#        training = asl.build_training(features_ground) # Experiment here with different feature sets
-#        word = 'VEGETABLE' # Experiment here with different words
-#        word_sequences = training.get_word_sequences(word)
-#        split_method = KFold()
-#        for cv_train_idx, cv_test_idx in split_method.split(word_sequences):
-#            print("Train fold indices:{} Test fold indices:{}".format(cv_train_idx, cv_test_idx))  # view indices of the folds        
-
         split_method = KFold()
         
         mean_scores = {}

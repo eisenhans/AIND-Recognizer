@@ -11,7 +11,7 @@ from asl_data import AslDb
 import warnings
 import hmmlearn
 from hmmlearn.hmm import GaussianHMM
-from my_model_selectors import SelectorCV
+from my_model_selectors import (SelectorCV, SelectorBIC, SelectorDIC)
 from asl_utils import combine_sequences
 import math
 from matplotlib import (cm, pyplot as plt, mlab)
@@ -140,7 +140,7 @@ def visualize(word, model):
 #print("logL = {}".format(logL))
 
 words_to_train = ['BOOK']
-training = asl.build_training(features_delta_norm)  # Experiment here with different feature sets defined in part 1
+training = asl.build_training(features_norm_delta)  # Experiment here with different feature sets defined in part 1
 # sequences and xlengths contain the same information in different form. sequences is more
 # human-friendly, xlengths is for efficient calculation.
 sequences = training.get_all_sequences()
@@ -160,7 +160,7 @@ word_xlength = xlengths[words_to_train[0]]
 #
 for word in words_to_train:
     start = timeit.default_timer()
-    model = SelectorCV(sequences, xlengths, words_to_train[0], 
+    model = SelectorDIC(sequences, xlengths, words_to_train[0], 
                     min_n_components=2, max_n_components=15, random_state = 14, verbose = True).select()
     end = timeit.default_timer()-start
     
