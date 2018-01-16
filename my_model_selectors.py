@@ -103,7 +103,7 @@ class SelectorCV(ModelSelector):
 
     '''
     def select(self):
-#        warnings.filterwarnings("ignore", category=DeprecationWarning)
+        warnings.filterwarnings("ignore", category=DeprecationWarning)
         
 #        training = asl.build_training(features_ground) # Experiment here with different feature sets
 #        word = 'VEGETABLE' # Experiment here with different words
@@ -118,7 +118,7 @@ class SelectorCV(ModelSelector):
         for num_states in range(2, 8):
             scores = []
             for cv_train_idx, cv_test_idx in split_method.split(self.sequences):
-                print("Train fold indices:{} Test fold indices:{}".format(cv_train_idx, cv_test_idx))  # view indices of the folds                  
+#                print("Train fold indices:{} Test fold indices:{}".format(cv_train_idx, cv_test_idx))  # view indices of the folds                  
             
                 train_x, train_lengths = combine_sequences(cv_train_idx, self.sequences)
                 test_x, test_lengths = combine_sequences(cv_test_idx, self.sequences)
@@ -143,21 +143,20 @@ class SelectorCV(ModelSelector):
             mean_score = np.mean(scores)
             mean_scores[num_states] = mean_score
             print('scores for {} states: {}, mean score: {}'.format(num_states, scores, mean_score))
-                        
-        print('mean scores: {}'.format(mean_scores))
         
-#        try:
-#            hmm_model = GaussianHMM(n_components=4, covariance_type="diag", n_iter=1000,
-#                                    random_state=self.random_state, verbose=False).fit(self.X, self.lengths)
-#    
-#            if self.verbose:
-#                print("model created for {} with {} states".format(self.this_word, self.n_constant))
-#            return hmm_model
-#        except Exception as e:
-#            if self.verbose:
-#                print("failure on {} with {} states".format(self.this_word, self.n_constant))
-#                print('error: ', e)
-#            return None
+        max_key = max(mean_scores, key=mean_scores.get)                
+        print('mean scores: {}, max: {}'.format(mean_scores, max_key))
+        
+        try:
+            chosen_model = GaussianHMM(n_components=max_key, covariance_type="diag", n_iter=1000,
+                                    random_state=self.random_state, verbose=False).fit(self.X, self.lengths)
+            return chosen_model
+#                    if self.verbose:
+#                        print("model created for {} with {} states".format(self.this_word, self.n_constant))
+        except Exception as e:
+            if self.verbose:
+                print("failure on {} with {} states".format(self.this_word, self.n_constant))
+                print('error: ', e)
         
         best_num_components = self.n_constant
         return self.base_model(best_num_components)

@@ -13,7 +13,8 @@ import hmmlearn
 from hmmlearn.hmm import GaussianHMM
 from my_model_selectors import SelectorCV
 from asl_utils import combine_sequences
-
+import math
+from matplotlib import (cm, pyplot as plt, mlab)
 
 asl = AslDb() # initializes the database
 #print('asl head: {}'.format(asl.df.head()))
@@ -59,28 +60,70 @@ asl.df['norm-rx'] = (asl.df['right-x'] - asl.df['right-x-mean']) / asl.df['right
 asl.df['norm-ry'] = (asl.df['right-y'] - asl.df['right-y-mean']) / asl.df['right-y-std']
 asl.df['norm-lx'] = (asl.df['left-x'] - asl.df['left-x-mean']) / asl.df['left-x-std']
 asl.df['norm-ly'] = (asl.df['left-y'] - asl.df['left-y-mean']) / asl.df['left-y-std']
-
 features_norm = ['norm-rx', 'norm-ry', 'norm-lx','norm-ly']
 
 asl.df['polar-rr'] = np.sqrt(asl.df['grnd-rx']**2 + asl.df['grnd-ry']**2)
 asl.df['polar-rtheta'] = np.arctan2(asl.df['grnd-rx'], asl.df['grnd-ry'])
 asl.df['polar-lr'] = np.sqrt(asl.df['grnd-lx']**2 + asl.df['grnd-ly']**2)
 asl.df['polar-ltheta'] = np.arctan2(asl.df['grnd-lx'], asl.df['grnd-ly'])
-
 features_polar = ['polar-rr', 'polar-rtheta', 'polar-lr', 'polar-ltheta']
 
-df_delta = asl.df[['right-x','right-y','left-x','left-y']].diff().fillna(0)
-
+df_delta = asl.df[['right-x', 'right-y', 'left-x', 'left-y']].diff().fillna(0)
 asl.df['delta-rx'] = df_delta['right-x']
 asl.df['delta-ry'] = df_delta['right-y']
 asl.df['delta-lx'] = df_delta['left-x']
 asl.df['delta-ly'] = df_delta['left-y']
-
 features_delta = ['delta-rx', 'delta-ry', 'delta-lx', 'delta-ly']
+
+df_norm_delta = asl.df[['norm-rx', 'norm-ry', 'norm-lx', 'norm-ly']].diff().fillna(0)
+asl.df['norm-delta-rx'] = df_norm_delta['norm-rx']
+asl.df['norm-delta-ry'] = df_norm_delta['norm-ry']
+asl.df['norm-delta-lx'] = df_norm_delta['norm-lx']
+asl.df['norm-delta-ly'] = df_norm_delta['norm-ly']
+features_norm_delta = ['norm-delta-rx', 'norm-delta-ry', 'norm-delta-lx', 'norm-delta-ly',]
+
+
+df_means = asl.df.groupby('speaker').mean()
+df_std = asl.df.groupby('speaker').std()
+
+asl.df['delta-rx-mean'] = asl.df['speaker'].map(df_means['delta-rx'])
+asl.df['delta-ry-mean'] = asl.df['speaker'].map(df_means['delta-ry'])
+asl.df['delta-lx-mean'] = asl.df['speaker'].map(df_means['delta-lx'])
+asl.df['delta-ly-mean'] = asl.df['speaker'].map(df_means['delta-ly'])
+
+asl.df['delta-rx-std'] = asl.df['speaker'].map(df_std['delta-rx'])
+asl.df['delta-ry-std'] = asl.df['speaker'].map(df_std['delta-ry'])
+asl.df['delta-lx-std'] = asl.df['speaker'].map(df_std['delta-lx'])
+asl.df['delta-ly-std'] = asl.df['speaker'].map(df_std['delta-ly'])
+
+asl.df['norm-delta-rx'] = (asl.df['delta-rx'] - asl.df['delta-rx-mean']) / asl.df['delta-rx-std']
+asl.df['norm-delta-ry'] = (asl.df['delta-ry'] - asl.df['delta-ry-mean']) / asl.df['delta-ry-std']
+asl.df['norm-delta-lx'] = (asl.df['delta-lx'] - asl.df['delta-lx-mean']) / asl.df['delta-lx-std']
+asl.df['norm-delta-ly'] = (asl.df['delta-ly'] - asl.df['delta-ly-mean']) / asl.df['delta-ly-std']
+features_delta_norm = ['norm-delta-rx', 'norm-delta-ry', 'norm-delta-lx', 'norm-delta-ly',]
 #
 #print(asl.df.head())
 
+def visualize(word, model):
+    """ visualize the input model for a particular word """
+    variance=np.array([np.diag(model.covars_[i]) for i in range(model.n_components)])
+    figures = []
+    for parm_idx in range(len(model.means_[0])):
+        xmin = int(min(model.means_[:,parm_idx]) - max(variance[:,parm_idx]))
+        xmax = int(max(model.means_[:,parm_idx]) + max(variance[:,parm_idx]))
+        fig, axs = plt.subplots(model.n_components, sharex=True, sharey=False)
+        colours = cm.rainbow(np.linspace(0, 1, model.n_components))
+        for i, (ax, colour) in enumerate(zip(axs, colours)):
+            x = np.linspace(xmin, xmax, 100)
+            mu = model.means_[i,parm_idx]
+            sigma = math.sqrt(np.diag(model.covars_[i])[parm_idx])
+            ax.plot(x, mlab.normpdf(x, mu, sigma), c=colour)
+            ax.set_title("{} feature {} hidden state #{}".format(word, parm_idx, i))
 
+            ax.grid(True)
+        figures.append(plt)
+    for p in figures:
+        p.show()
 
 #def train_a_word(word, num_hidden_states, features):
 #    
@@ -96,8 +139,8 @@ features_delta = ['delta-rx', 'delta-ry', 'delta-lx', 'delta-ly']
 #print("Number of states trained in model for {} is {}".format(demoword, model.n_components))
 #print("logL = {}".format(logL))
 
-words_to_train = ['FISH']
-training = asl.build_training(features_ground)  # Experiment here with different feature sets defined in part 1
+words_to_train = ['BOOK']
+training = asl.build_training(features_delta_norm)  # Experiment here with different feature sets defined in part 1
 # sequences and xlengths contain the same information in different form. sequences is more
 # human-friendly, xlengths is for efficient calculation.
 sequences = training.get_all_sequences()
@@ -120,6 +163,8 @@ for word in words_to_train:
     model = SelectorCV(sequences, xlengths, words_to_train[0], 
                     min_n_components=2, max_n_components=15, random_state = 14, verbose = True).select()
     end = timeit.default_timer()-start
+    
+    visualize(word, model)
 #    if model is not None:
 #        print("Training complete for {} with {} states with time {} seconds".format(word, model.n_components, end))
 #    else:
