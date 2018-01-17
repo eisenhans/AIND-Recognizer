@@ -18,6 +18,8 @@ def recognize(models: dict, test_set: SinglesData):
            ['WORDGUESS0', 'WORDGUESS1', 'WORDGUESS2',...]
    """
     warnings.filterwarnings("ignore", category=DeprecationWarning)
+    print('test_set head: {}'.format(test_set.df.head()))
+    
     probabilities = []
     guesses = []
     # TODO implement the recognizer

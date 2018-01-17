@@ -80,6 +80,8 @@ asl.df['norm-delta-rx'] = df_norm_delta['norm-rx']
 asl.df['norm-delta-ry'] = df_norm_delta['norm-ry']
 asl.df['norm-delta-lx'] = df_norm_delta['norm-lx']
 asl.df['norm-delta-ly'] = df_norm_delta['norm-ly']
+# better than features_delta_norm
+# idea: First normalize so that they are comparable. Then delta.
 features_norm_delta = ['norm-delta-rx', 'norm-delta-ry', 'norm-delta-lx', 'norm-delta-ly',]
 
 
@@ -96,11 +98,12 @@ asl.df['delta-ry-std'] = asl.df['speaker'].map(df_std['delta-ry'])
 asl.df['delta-lx-std'] = asl.df['speaker'].map(df_std['delta-lx'])
 asl.df['delta-ly-std'] = asl.df['speaker'].map(df_std['delta-ly'])
 
-asl.df['norm-delta-rx'] = (asl.df['delta-rx'] - asl.df['delta-rx-mean']) / asl.df['delta-rx-std']
-asl.df['norm-delta-ry'] = (asl.df['delta-ry'] - asl.df['delta-ry-mean']) / asl.df['delta-ry-std']
-asl.df['norm-delta-lx'] = (asl.df['delta-lx'] - asl.df['delta-lx-mean']) / asl.df['delta-lx-std']
-asl.df['norm-delta-ly'] = (asl.df['delta-ly'] - asl.df['delta-ly-mean']) / asl.df['delta-ly-std']
-features_delta_norm = ['norm-delta-rx', 'norm-delta-ry', 'norm-delta-lx', 'norm-delta-ly',]
+asl.df['delta-norm-rx'] = (asl.df['delta-rx'] - asl.df['delta-rx-mean']) / asl.df['delta-rx-std']
+asl.df['delta-norm-ry'] = (asl.df['delta-ry'] - asl.df['delta-ry-mean']) / asl.df['delta-ry-std']
+asl.df['delta-norm-lx'] = (asl.df['delta-lx'] - asl.df['delta-lx-mean']) / asl.df['delta-lx-std']
+asl.df['delta-norm-ly'] = (asl.df['delta-ly'] - asl.df['delta-ly-mean']) / asl.df['delta-ly-std']
+# worse than features_norm_delta
+features_delta_norm = ['delta-norm-rx', 'delta-norm-ry', 'delta-norm-lx', 'delta-norm-ly']
 #
 #print(asl.df.head())
 
@@ -139,8 +142,9 @@ def visualize(word, model):
 #print("Number of states trained in model for {} is {}".format(demoword, model.n_components))
 #print("logL = {}".format(logL))
 
+#words_to_train = ['FISH', 'BOOK', 'VEGETABLE', 'FUTURE', 'JOHN']
 words_to_train = ['BOOK']
-training = asl.build_training(features_norm_delta)  # Experiment here with different feature sets defined in part 1
+training = asl.build_training(features_delta_norm)  # Experiment here with different feature sets defined in part 1
 # sequences and xlengths contain the same information in different form. sequences is more
 # human-friendly, xlengths is for efficient calculation.
 sequences = training.get_all_sequences()
@@ -159,12 +163,14 @@ word_xlength = xlengths[words_to_train[0]]
 #print('done')
 #
 for word in words_to_train:
+    print('training word {}'.format(word))
     start = timeit.default_timer()
-    model = SelectorDIC(sequences, xlengths, words_to_train[0], 
+    model = SelectorDIC(sequences, xlengths, word, 
                     min_n_components=2, max_n_components=15, random_state = 14, verbose = True).select()
     end = timeit.default_timer()-start
     
-    visualize(word, model)
+#    if model:
+#        visualize(word, model)
 #    if model is not None:
 #        print("Training complete for {} with {} states with time {} seconds".format(word, model.n_components, end))
 #    else:
