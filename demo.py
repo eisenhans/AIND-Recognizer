@@ -11,7 +11,7 @@ from asl_data import AslDb
 import warnings
 import hmmlearn
 from hmmlearn.hmm import GaussianHMM
-from my_model_selectors import (SelectorConstant, SelectorCV, SelectorBIC, SelectorDIC)
+from my_model_selectors import (SelectorConstant, SelectorCV, SelectorBIC, SelectorDIC, SelectorBDCombined)
 from asl_utils import (combine_sequences, show_errors)
 import math
 from matplotlib import (cm, pyplot as plt, mlab)
@@ -187,7 +187,7 @@ model_selector = SelectorDIC # change as needed
 
 # TODO Recognize the test set and display the result with the show_errors method
 models = train_all_words(features, model_selector)
-#models = train_word(features, model_selector, 'LEG')
+#models = train_word(features, model_selector, 'JOHN')
 test_set = asl.build_test(features)
 probabilities, guesses = recognize(models, test_set)
 show_errors(guesses, test_set)
