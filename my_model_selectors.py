@@ -8,15 +8,18 @@ from hmmlearn.hmm import GaussianHMM
 from sklearn.model_selection import KFold
 from asl_utils import combine_sequences
 
+class DummyHMM(GaussianHMM):
+    
+    def score(self, xes, lengths):
+        return float('-inf')
 
 class ModelSelector(object):
     '''
     base class for model selection (strategy design pattern)
     '''
-
     def __init__(self, all_word_sequences: dict, all_word_Xlengths: dict, this_word: str,
                  n_constant=3,
-                 min_n_components=2, max_n_components=10,
+                 min_n_components=2, max_n_components=15,
                  random_state=14, verbose=False):
         self.words = all_word_sequences
         self.hwords = all_word_Xlengths
@@ -33,9 +36,7 @@ class ModelSelector(object):
         raise NotImplementedError
 
     def base_model(self, num_states):
-        # with warnings.catch_warnings():
         warnings.filterwarnings("ignore", category=DeprecationWarning)
-        # warnings.filterwarnings("ignore", category=RuntimeWarning)
         try:
             hmm_model = GaussianHMM(n_components=num_states, covariance_type="diag", n_iter=1000,
                                     random_state=self.random_state, verbose=False).fit(self.X, self.lengths)
@@ -46,13 +47,15 @@ class ModelSelector(object):
             if self.verbose:
                 print("failure on {} with {} states".format(self.this_word, num_states))
             return None
+        
+    def dummy_model(self):
+        return DummyHMM()
 
 
 class SelectorConstant(ModelSelector):
     """ select the model with value self.n_constant
 
     """
-
     def select(self):
         """ select based on n_constant value
 
@@ -76,44 +79,39 @@ class SelectorBIC(ModelSelector):
         :return: GaussianHMM object
         """
         warnings.filterwarnings("ignore", category=DeprecationWarning)
-        
-        bics = {}
+        best_model = self.dummy_model()
+        best_num_states = -1
+        min_bic = float('inf')
         for num_states in range(self.min_n_components, self.max_n_components + 1):
-           
             try:
-                hmm_model = GaussianHMM(n_components=num_states, covariance_type="diag", n_iter=1000,
-                                        random_state=self.random_state, verbose=False).fit(self.X, self.lengths)
+                model = GaussianHMM(n_components=num_states, covariance_type="diag", n_iter=1000,
+                                    random_state=self.random_state, verbose=False).fit(self.X, self.lengths)
         
-                score = hmm_model.score(self.X, self.lengths)
+                score = model.score(self.X, self.lengths)
                 bic = self.bic(score, 4, num_states)
-                bics[num_states] = bic                
+                if bic < min_bic:
+                    min_bic = bic
+                    best_model = model
+                    best_num_states = num_states
                 
             except Exception as e:
                 if self.verbose:
                     print("failure on {} with {} states, error: {}".format(self.this_word, num_states, e))
         
-        min_key = min(bics, key = bics.get)                
-        print('bics: {}, min: {}'.format(bics, min_key))
-        
-        try:
-            chosen_model = GaussianHMM(n_components=min_key, covariance_type="diag", n_iter=1000,
-                                    random_state=self.random_state, verbose=False).fit(self.X, self.lengths)
-            return chosen_model
-
-        except Exception as e:
-            if self.verbose:
-                print("failure on {} with {} states, error: {}".format(self.this_word, min_key, e))
-        
-        best_num_components = self.n_constant
-        return self.base_model(best_num_components)
+        print('model for word {}: {} states'.format(self.this_word, best_num_states))
+        return best_model
     
     def bic(self, log_likelihood, num_features, num_states):
-        # TODO: understand this formula
-        p = np.square(num_states) + 2 * num_states * num_features - 1
-        bic = p * np.log(num_features) - 2 * log_likelihood
-#        print('log_likelihood: {}, num_features: {}, num_states: {}, p: {}, penalty: {}, bic: {}'.format(
-#                log_likelihood, num_features, num_states, p,  p * np.log(num_features), bic))
+        '''Number of parameters of our HMM (num_states =: n, num_features =: d):
+        n - 1 start probabilities (the probabilities must add up to 1, therefore the '-1')
+        n * (n - 1) transition probabilities (again the probabilities must add up to 1)
+        2 * d * n for the mean and variance of the Gaussian distributions for each feature and each state
         
+        So the sum is:
+        p = n - 1 + n * (n - 1) + 2 * d * n = n^2 + 2 * d * n - 1
+        '''
+        p = np.square(num_states) + 2 * num_features * num_states - 1
+        bic = p * np.log(num_features) - 2 * log_likelihood
         return bic
 
 class SelectorDIC(ModelSelector):
@@ -125,50 +123,40 @@ class SelectorDIC(ModelSelector):
     https://pdfs.semanticscholar.org/ed3d/7c4a5f607201f3848d4c02dd9ba17c791fc2.pdf
     DIC = log(P(X(i)) - 1/(M-1)SUM(log(P(X(all but i))
     '''
-
     def select(self):
         warnings.filterwarnings("ignore", category=DeprecationWarning)
-
-        dics = {}
+        best_model = self.dummy_model()
+        best_num_states = -1
+        max_dic = float('-inf')
         for num_states in range(self.min_n_components, self.max_n_components + 1):
             try:
-                hmm_model = GaussianHMM(n_components=num_states, covariance_type="diag", n_iter=1000,
-                                        random_state=self.random_state, verbose=False).fit(self.X, self.lengths)
+                model = GaussianHMM(n_components=num_states, covariance_type="diag", n_iter=1000,
+                                    random_state=self.random_state, verbose=False).fit(self.X, self.lengths)
         
-                score = hmm_model.score(self.X, self.lengths)
-#                print('score for this word {} ({} states): {}'.format(self.this_word, num_states, score))
+                score = model.score(self.X, self.lengths)
                 other_scores = []
                 better_scores = 0
                 for word in self.hwords:
                     if word != self.this_word:
                         xes, lengths = self.hwords[word]
-                        other_score = hmm_model.score(xes, lengths)
+                        other_score = model.score(xes, lengths)
                         other_scores.append(other_score)
                         if other_score > score:
                             better_scores += 1
                             
 #                print('{} out of {} words fit the model better than this word'.format(better_scores, len(self.hwords), self.this_word))
                 dic = self.dic(score, other_scores)
-                dics[num_states] = dic
+                if dic > max_dic:
+                    max_dic = dic
+                    best_model = model
+                    best_num_states = num_states
                 
             except Exception as e:
                 if self.verbose:
                     print("failure on {} with {} states, error: {}".format(self.this_word, num_states, e))
         
-        max_key = max(dics, key = dics.get)                
-        print('dics: {}, max: {}'.format(dics, max_key))
-        
-        try:
-            chosen_model = GaussianHMM(n_components=max_key, covariance_type="diag", n_iter=1000,
-                                    random_state=self.random_state, verbose=False).fit(self.X, self.lengths)
-            return chosen_model
-
-        except Exception as e:
-            if self.verbose:
-                print("failure on {} with {} states, error: {}".format(self.this_word, max_key, e))
-        
-        best_num_components = self.n_constant
-        return self.base_model(best_num_components)
+        print('model for word {}: {} states'.format(self.this_word, best_num_states))
+        return best_model
     
     def dic(self, log_likelihood, other_log_likelihoods):
         # DIC = log(P(X(i)) - 1/(M-1)SUM(log(P(X(all but i))
@@ -184,7 +172,7 @@ class SelectorCV(ModelSelector):
         warnings.filterwarnings("ignore", category=DeprecationWarning)
         if len(self.sequences) < 3:
             print('SelectorCV does not work with only {} samples'.format(len(self.sequences)))
-            return None
+            return self.dummy_model()
         
         split_method = KFold()
         

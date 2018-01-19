@@ -11,10 +11,11 @@ from asl_data import AslDb
 import warnings
 import hmmlearn
 from hmmlearn.hmm import GaussianHMM
-from my_model_selectors import (SelectorCV, SelectorBIC, SelectorDIC)
-from asl_utils import combine_sequences
+from my_model_selectors import (SelectorConstant, SelectorCV, SelectorBIC, SelectorDIC)
+from asl_utils import (combine_sequences, show_errors)
 import math
 from matplotlib import (cm, pyplot as plt, mlab)
+from my_recognizer import recognize
 
 asl = AslDb() # initializes the database
 #print('asl head: {}'.format(asl.df.head()))
@@ -128,46 +129,24 @@ def visualize(word, model):
     for p in figures:
         p.show()
 
-#def train_a_word(word, num_hidden_states, features):
-#    
-#    warnings.filterwarnings("ignore", category=DeprecationWarning)
-#    training = asl.build_training(features)  
-#    X, lengths = training.get_word_Xlengths(word)
-#    model = GaussianHMM(n_components=num_hidden_states, n_iter=1000).fit(X, lengths)
-#    logL = model.score(X, lengths)
-#    return model, logL
-#
-#demoword = 'BOOK'
-#model, logL = train_a_word(demoword, 3, features_ground)
-#print("Number of states trained in model for {} is {}".format(demoword, model.n_components))
-#print("logL = {}".format(logL))
 
 #words_to_train = ['FISH', 'BOOK', 'VEGETABLE', 'FUTURE', 'JOHN']
-words_to_train = ['BOOK']
-training = asl.build_training(features_delta_norm)  # Experiment here with different feature sets defined in part 1
+#words_to_train = ['BOOK']
+#training = asl.build_training(features_delta_norm)  # Experiment here with different feature sets defined in part 1
 # sequences and xlengths contain the same information in different form. sequences is more
 # human-friendly, xlengths is for efficient calculation.
-sequences = training.get_all_sequences()
-xlengths = training.get_all_Xlengths()
+#sequences = training.get_all_sequences()
+#xlengths = training.get_all_Xlengths()
 
-#print('sequences: {}'.format(sequences))
-#print('\nXlengths: {}'.format(Xlengths))
-# one element of john_sequence is the word 'JOHN' signed once, i.e. a list of quadruples
-word_sequence = sequences[words_to_train[0]]
-# john_xlength is a tuple, the first part of this tuple is a list of quadruples where all the
-# elements of john_sequence have been concatenated, i.e. it starts with the elements of
-# john_sequence[0], then the elements of john_sequence[1] follow etc.
-word_xlength = xlengths[words_to_train[0]]
-#print('word sequence: {}'.format(word_sequence))
-#print('word xlength: {}'.format(word_xlength))
-#print('done')
+#word_sequence = sequences[words_to_train[0]]
+#word_xlength = xlengths[words_to_train[0]]
 #
-for word in words_to_train:
-    print('training word {}'.format(word))
-    start = timeit.default_timer()
-    model = SelectorDIC(sequences, xlengths, word, 
-                    min_n_components=2, max_n_components=15, random_state = 14, verbose = True).select()
-    end = timeit.default_timer()-start
+#for word in words_to_train:
+#    print('training word {}'.format(word))
+#    start = timeit.default_timer()
+#    model = SelectorDIC(sequences, xlengths, word, 
+#                    min_n_components=2, max_n_components=15, random_state = 14, verbose = True).select()
+#    end = timeit.default_timer()-start
     
 #    if model:
 #        visualize(word, model)
@@ -176,3 +155,39 @@ for word in words_to_train:
 #    else:
 #        print("Training failed for {}".format(word))
 
+#Part 3
+def train_word(features, model_selector, word):
+    training = asl.build_training(features)  # Experiment here with different feature sets defined in part 1
+    sequences = training.get_all_sequences()
+    Xlengths = training.get_all_Xlengths()
+    model_dict = {}
+    model = model_selector(sequences, Xlengths, word, verbose = True).select()
+    model_dict[word] = model
+    return model_dict        
+        
+def train_all_words(features, model_selector):
+    training = asl.build_training(features)  # Experiment here with different feature sets defined in part 1
+    sequences = training.get_all_sequences()
+    Xlengths = training.get_all_Xlengths()
+    model_dict = {}
+    for word in training.words:
+        model = model_selector(sequences, Xlengths, word).select()
+        model_dict[word] = model
+    return model_dict
+
+#models = train_all_words(features_ground, SelectorConstant)
+#print("Number of word models returned = {}".format(len(models)))
+
+#test_set = asl.build_test(features_norm)
+#print("Number of test set items: {}".format(test_set.num_items))
+#print("Number of test set sentences: {}".format(len(test_set.sentences_index)))
+
+features = features_norm_delta # change as needed
+model_selector = SelectorDIC # change as needed
+
+# TODO Recognize the test set and display the result with the show_errors method
+models = train_all_words(features, model_selector)
+#models = train_word(features, model_selector, 'LEG')
+test_set = asl.build_test(features)
+probabilities, guesses = recognize(models, test_set)
+show_errors(guesses, test_set)
