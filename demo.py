@@ -5,6 +5,7 @@ Created on Wed Jan 10 17:49:36 2018
 @author: Markus
 """
 import timeit
+import os
 import numpy as np
 import pandas as pd
 from asl_data import AslDb
@@ -16,6 +17,7 @@ from asl_utils import (combine_sequences, show_errors)
 import math
 from matplotlib import (cm, pyplot as plt, mlab)
 from my_recognizer import recognize
+from my_ngrams import (one_gram_probs, two_gram_guesses, three_gram_guesses)
 
 asl = AslDb() # initializes the database
 #print('asl head: {}'.format(asl.df.head()))
@@ -69,6 +71,12 @@ asl.df['polar-lr'] = np.sqrt(asl.df['grnd-lx']**2 + asl.df['grnd-ly']**2)
 asl.df['polar-ltheta'] = np.arctan2(asl.df['grnd-lx'], asl.df['grnd-ly'])
 features_polar = ['polar-rr', 'polar-rtheta', 'polar-lr', 'polar-ltheta']
 
+asl.df['norm-polar-rr'] = np.sqrt(asl.df['norm-rx']**2 + asl.df['norm-ry']**2)
+asl.df['norm-polar-rtheta'] = np.arctan2(asl.df['norm-rx'], asl.df['norm-ry'])
+asl.df['norm-polar-lr'] = np.sqrt(asl.df['norm-lx']**2 + asl.df['norm-ly']**2)
+asl.df['norm-polar-ltheta'] = np.arctan2(asl.df['norm-lx'], asl.df['norm-ly'])
+features_norm_polar = ['norm-polar-rr', 'norm-polar-rtheta', 'norm-polar-lr', 'norm-polar-ltheta']
+
 df_delta = asl.df[['right-x', 'right-y', 'left-x', 'left-y']].diff().fillna(0)
 asl.df['delta-rx'] = df_delta['right-x']
 asl.df['delta-ry'] = df_delta['right-y']
@@ -85,6 +93,12 @@ asl.df['norm-delta-ly'] = df_norm_delta['norm-ly']
 # idea: First normalize so that they are comparable. Then delta.
 features_norm_delta = ['norm-delta-rx', 'norm-delta-ry', 'norm-delta-lx', 'norm-delta-ly',]
 
+df_polar_delta = asl.df[['polar-rr', 'polar-rtheta', 'polar-lr', 'polar-ltheta']].diff().fillna(0)
+asl.df['polar-delta-rr'] = df_polar_delta['polar-rr']
+asl.df['polar-delta-rtheta'] = df_polar_delta['polar-rtheta']
+asl.df['polar-delta-lr'] = df_polar_delta['polar-lr']
+asl.df['polar-delta-ltheta'] = df_polar_delta['polar-ltheta']
+features_polar_delta = ['polar-delta-rr', 'polar-delta-rtheta', 'polar-delta-lr', 'polar-delta-ltheta']
 
 df_means = asl.df.groupby('speaker').mean()
 df_std = asl.df.groupby('speaker').std()
@@ -175,19 +189,23 @@ def train_all_words(features, model_selector):
         model_dict[word] = model
     return model_dict
 
-#models = train_all_words(features_ground, SelectorConstant)
-#print("Number of word models returned = {}".format(len(models)))
-
-#test_set = asl.build_test(features_norm)
-#print("Number of test set items: {}".format(test_set.num_items))
-#print("Number of test set sentences: {}".format(len(test_set.sentences_index)))
-
 features = features_norm_delta # change as needed
-model_selector = SelectorDIC # change as needed
+model_selector = SelectorBIC # change as needed
 
-# TODO Recognize the test set and display the result with the show_errors method
-models = train_all_words(features, model_selector)
-#models = train_word(features, model_selector, 'JOHN')
-test_set = asl.build_test(features)
-probabilities, guesses = recognize(models, test_set)
-show_errors(guesses, test_set)
+#models = train_all_words(features, model_selector)
+#test_set = asl.build_test(features)
+#probabilities, guesses = recognize(models, test_set)
+
+# create a DataFrame of log likelihoods for the test word items
+#df_probs = pd.DataFrame(data=probabilities)
+#df_probs.head()
+
+#one_gram_probs, one_gram_guesses = one_gram_probs(probabilities)
+#two_gram_guesses = two_gram_guesses(test_set, probabilities)
+three_gram_guesses = three_gram_guesses(test_set, probabilities)
+
+#show_errors(guesses, test_set)
+#show_errors(two_gram_guesses, test_set)
+show_errors(three_gram_guesses, test_set)
+
+    

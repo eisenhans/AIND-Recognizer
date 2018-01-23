@@ -37,7 +37,6 @@ def show_errors(guesses: list, test_set: SinglesData):
                 recognized_sentence[i] = '*' + recognized_sentence[i]
         print('{:5}: {:60}  {}'.format(video_num, ' '.join(recognized_sentence), ' '.join(correct_sentence)))
 
-
 def getKey(item):
     return item[1]
 
