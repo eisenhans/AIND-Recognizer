@@ -18,24 +18,23 @@ def recognize(models: dict, test_set: SinglesData):
            ['WORDGUESS0', 'WORDGUESS1', 'WORDGUESS2',...]
    """
     warnings.filterwarnings("ignore", category=DeprecationWarning)
-    sequences = test_set.get_all_sequences()
-#    xlengths = test_set.get_all_Xlengths()
-#    item_seq1 = test_set.get_item_sequences(1)
-    
     probabilities = []
     guesses = []
-    
-    for word_id in sequences:
+
+    for word_id in test_set.get_all_sequences():
         prob = {}
         for word in models:
             xes, lengths = test_set.get_item_Xlengths(word_id)
-            score = models[word].score(xes, lengths)
+            try:
+                score = models[word].score(xes, lengths)
+            except Exception:
+                score = float('-inf')
+
             prob[word] = score
-#            print('probality that word {} is {}: {}'.format(word_id, word, score))
-        
+
         guess = max(prob, key=prob.get)
         probabilities.append(prob)
         guesses.append(guess)
-        print('guess for word {}: {}, score = {}'.format(word_id, guess, prob[guess]))
+        # print('guess for word {}: {}, score = {}'.format(word_id, guess, prob[guess]))
     
     return probabilities, guesses

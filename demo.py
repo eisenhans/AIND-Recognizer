@@ -5,19 +5,15 @@ Created on Wed Jan 10 17:49:36 2018
 @author: Markus
 """
 import timeit
-import os
 import numpy as np
 import pandas as pd
 from asl_data import AslDb
-import warnings
-import hmmlearn
-from hmmlearn.hmm import GaussianHMM
-from my_model_selectors import (SelectorConstant, SelectorCV, SelectorBIC, SelectorDIC, SelectorBDCombined)
+from my_model_selectors import (SelectorConstant, SelectorCV, SelectorBIC, SelectorDIC)
 from asl_utils import (combine_sequences, show_errors)
 import math
 from matplotlib import (cm, pyplot as plt, mlab)
 from my_recognizer import recognize
-from my_ngrams import (one_gram_probs, two_gram_guesses, three_gram_guesses)
+from my_ngrams import (OneGram, TwoGram, ThreeGram)
 
 asl = AslDb() # initializes the database
 #print('asl head: {}'.format(asl.df.head()))
@@ -177,8 +173,9 @@ def train_word(features, model_selector, word):
     model_dict = {}
     model = model_selector(sequences, Xlengths, word, verbose = True).select()
     model_dict[word] = model
-    return model_dict        
-        
+    return model_dict
+
+
 def train_all_words(features, model_selector):
     training = asl.build_training(features)  # Experiment here with different feature sets defined in part 1
     sequences = training.get_all_sequences()
@@ -189,23 +186,22 @@ def train_all_words(features, model_selector):
         model_dict[word] = model
     return model_dict
 
-features = features_norm_delta # change as needed
-model_selector = SelectorBIC # change as needed
+start = timeit.default_timer()
+features = features_norm_delta  # change as needed
+model_selector = SelectorDIC  # change as needed
 
-#models = train_all_words(features, model_selector)
-#test_set = asl.build_test(features)
-#probabilities, guesses = recognize(models, test_set)
+models = train_all_words(features, model_selector)
+test_set = asl.build_test(features)
+probabilities, guesses = recognize(models, test_set)
 
-# create a DataFrame of log likelihoods for the test word items
-#df_probs = pd.DataFrame(data=probabilities)
-#df_probs.head()
+# one_gram_guesses = OneGram().guess_words(probabilities)
+# two_gram_guesses = TwoGram().guess_words(test_set, probabilities)
+# three_gram_guesses = ThreeGram().guess_words(test_set, probabilities)
 
-#one_gram_probs, one_gram_guesses = one_gram_probs(probabilities)
-#two_gram_guesses = two_gram_guesses(test_set, probabilities)
-three_gram_guesses = three_gram_guesses(test_set, probabilities)
+show_errors(guesses, test_set)  # WER 51.7
+# show_errors(one_gram_guesses, test_set)  # WER 56.2
+# show_errors(two_gram_guesses, test_set)  # WER 42.1
+# show_errors(three_gram_guesses, test_set)  # WER 39.3
 
-#show_errors(guesses, test_set)
-#show_errors(two_gram_guesses, test_set)
-show_errors(three_gram_guesses, test_set)
-
-    
+end = timeit.default_timer() - start
+print('time: {}'.format(end))
