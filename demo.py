@@ -186,22 +186,29 @@ def train_all_words(features, model_selector):
         model_dict[word] = model
     return model_dict
 
+
 start = timeit.default_timer()
 features = features_norm_delta  # change as needed
-model_selector = SelectorDIC  # change as needed
+model_selector = SelectorBIC  # change as needed
 
 models = train_all_words(features, model_selector)
+print('words trained, created {} models'.format(len(models)))
 test_set = asl.build_test(features)
+print('test set built')
 probabilities, guesses = recognize(models, test_set)
 
-# one_gram_guesses = OneGram().guess_words(probabilities)
-# two_gram_guesses = TwoGram().guess_words(test_set, probabilities)
-# three_gram_guesses = ThreeGram().guess_words(test_set, probabilities)
+one_gram_guesses = OneGram().guess_words(probabilities)
+two_gram_guesses = TwoGram().guess_words(test_set, probabilities)
+three_gram_guesses = ThreeGram().guess_words(test_set, probabilities)
 
-show_errors(guesses, test_set)  # WER 51.7
-# show_errors(one_gram_guesses, test_set)  # WER 56.2
-# show_errors(two_gram_guesses, test_set)  # WER 42.1
-# show_errors(three_gram_guesses, test_set)  # WER 39.3
+print('recognizer results:')
+show_errors(guesses, test_set)  # WER 51.7 / 52.8
+print('unigram results:')
+show_errors(one_gram_guesses, test_set)  # WER 56.2 / 58.4
+print('bigram results:')
+show_errors(two_gram_guesses, test_set)  # WER 42.1 / 46.6
+print('trigram results:')
+show_errors(three_gram_guesses, test_set)  # WER 39.3 / 41.6
 
 end = timeit.default_timer() - start
 print('time: {}'.format(end))

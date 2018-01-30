@@ -43,17 +43,8 @@ class ModelSelector(object):
         except:
             if self.verbose:
                 print("failure on {} with {} states".format(self.this_word, num_states))
-            return None
-
-    def create_model(self, num_states, xes, xlengths):
-        try:
-            return GaussianHMM(n_components=num_states, covariance_type="diag", n_iter=1000,
-                               random_state=self.random_state, verbose=False).fit(self.X, self.lengths)
-        except Exception as e:
-            if self.verbose:
-                print("failure on {} with {} states, error: {}".format(self.this_word, num_states, e))
             return self.dummy_model()
-        
+
     @staticmethod
     def dummy_model():
         return DummyHMM()
@@ -94,12 +85,13 @@ class SelectorBIC(ModelSelector):
         warnings.filterwarnings("ignore", category=DeprecationWarning)
         warnings.filterwarnings("ignore", category=RuntimeWarning)
         best_model = self.dummy_model()
+        num_data_points, num_features = self.X.shape
         best_num_states = -1
         min_bic = float('inf')
         for num_states in range(self.min_n_components, self.max_n_components + 1):
-            model = self.create_model(num_states, self.X, self.lengths)
+            model = self.base_model(num_states)
             score = self.score(model, self.X, self.lengths)
-            bic = self.bic(score, 4, num_states)
+            bic = self.bic(score, num_data_points, num_features, num_states)
             if bic < min_bic:
                 min_bic = bic
                 best_model = model
@@ -107,9 +99,9 @@ class SelectorBIC(ModelSelector):
                 
         # print('selected model for word {}: {} states'.format(self.this_word, best_num_states))
         return best_model
-    
+
     @staticmethod
-    def bic(log_likelihood, num_features, num_states):
+    def bic(log_likelihood, num_data_points, num_features, num_states):
         """
         Number of parameters of our HMM (num_states =: n, num_features =: d):
         n - 1 start probabilities (the probabilities must add up to 1, therefore the '-1')
@@ -119,9 +111,9 @@ class SelectorBIC(ModelSelector):
         So the sum is:
         p = n - 1 + n * (n - 1) + 2 * d * n = n^2 + 2 * d * n - 1
         """
-        alpha = 1.  # alpha = 1.1 is slightly better
         p = np.square(num_states) + 2 * num_features * num_states - 1
-        bic = alpha * p * np.log(num_features) - 2 * log_likelihood
+        alpha = .3
+        bic = alpha * p * np.log(num_data_points) - 2 * log_likelihood
         return bic
 
 
@@ -141,7 +133,7 @@ class SelectorDIC(ModelSelector):
         best_num_states = -1
         max_dic = float('-inf')
         for num_states in range(self.min_n_components, self.max_n_components + 1):
-            model = self.create_model(num_states, self.X, self.lengths)
+            model = self.base_model(num_states)
             score = self.score(model, self.X, self.lengths)
             other_scores = []
             for word in self.hwords:
@@ -170,6 +162,19 @@ class SelectorDIC(ModelSelector):
 
 
 class SelectorCV(ModelSelector):
+
+    """
+    Creates a model from the given parameters, or a dummy model if an exception occurs.
+    """
+    def create_model(self, num_states, xes, xlengths):
+        try:
+            return GaussianHMM(n_components=num_states, covariance_type="diag", n_iter=1000,
+                               random_state=self.random_state, verbose=False).fit(xes, xlengths)
+        except Exception as e:
+            if self.verbose:
+                print("failure on {} with {} states, error: {}".format(self.this_word, num_states, e))
+            return self.dummy_model()
+
     """
     select best model based on average log Likelihood of cross-validation folds
     """
@@ -181,17 +186,18 @@ class SelectorCV(ModelSelector):
         best_num_states = -1
         for num_states in range(self.min_n_components, self.max_n_components + 1):
             if len(self.sequences) < 3:
-                # no cross validation possible
-                model = self.create_model(num_states, self.X, self.lengths)
+                # Not enough data for cross validation. Create the model from all the data - this is the best we can do.
+                model = self.base_model(num_states)
                 score = self.score(model, self.X, self.lengths)
             else:
                 scores = []
                 for cv_train_idx, cv_test_idx in split_method.split(self.sequences):
                     train_x, train_lengths = combine_sequences(cv_train_idx, self.sequences)
                     test_x, test_lengths = combine_sequences(cv_test_idx, self.sequences)
-#                    print('training: {}, test: {}'.format(len(train_lengths), len(test_lengths)))
-                
+
+                    # Use the training data to create the model
                     model = self.create_model(num_states, train_x, train_lengths)
+                    # Use the test data to evaluate this model
                     score = self.score(model, test_x, test_lengths)
                     scores.append(score)
                         
@@ -203,4 +209,5 @@ class SelectorCV(ModelSelector):
                 best_num_states = num_states
                 
         # print('selected model for word {}: {} states'.format(self.this_word, best_num_states))
-        return self.create_model(num_states, self.X, self.lengths)
+        # Return a model based on all data
+        return self.base_model(best_num_states)
